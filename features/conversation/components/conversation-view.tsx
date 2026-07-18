@@ -44,7 +44,12 @@ export const ConversationView = ({ conversationId, initialMessages }: Conversati
             });
         },
         onError: (error) => {
-            toast.error(error.message);
+            const message = error.message ?? "Something went wrong";
+            if (message.includes("429") || message.toLowerCase().includes("rate limit") || message.toLowerCase().includes("quota")) {
+                toast.error("Rate limit reached — the free Gemini API tier allows 20 requests/day. Please wait a minute and try again, or upgrade your plan.");
+            } else {
+                toast.error(message);
+            }
         },
     })
     const title =

@@ -42,34 +42,64 @@ export async function POST(req: Request) {
     }
 
     
-    const result =  streamText({
-        model: getChatModel(conversation.model),
-        system: conversation.systemPrompt ?? "You are AskGPT , a helpful assistant",
-        messages: await convertToModelMessages(messages),
-        tools: chatTools,
-        stopWhen: stepCountIs(5),
-        
-        experimental_transform: smoothStream({
-            delayInMs: 20,
-            chunking: "word",
-        }),
-    });
+    try {
+        const result = streamText({
+            model: getChatModel(conversation.model),
+            system: conversation.systemPrompt ?? "You are AskGPT , a helpful assistant",
+            messages: await convertToModelMessages(messages),
+            tools: chatTools,
+            stopWhen: stepCountIs(5),
+            maxRetries: 2,
 
-    result.consumeStream();
+            experimental_transform: smoothStream({
+                delayInMs: 20,
+                chunking: "word",
+            }),
+        });
 
-    return createUIMessageStreamResponse({
-        stream:toUIMessageStream({
-           stream:result.stream,
-           originalMessages:messages,
-           generateMessageId:createIdGenerator({prefix:"msg" , size:16}),
-           onEnd:async({messages:finalMessages})=>{
-            try {
-                await saveChatMessages(id , finalMessages , {updateTitle:false})
-            } catch (error) {
-                console.error(error);
-            }
-           }
+        result.consumeStream();
+
+        return createUIMessageStreamResponse({
+            stream: toUIMessageStream({
+                stream: result.stream,
+                originalMessages: messages,
+                generateMessageId: createIdGenerator({ prefix: "msg", size: 16 }),
+                onEnd: async ({ messages: finalMessages }) => {
+                    try {
+                        await saveChatMessages(id, finalMessages, { updateTitle: false })
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+            })
         })
-    })
+    } catch (error: unknown) {
+        console.error("[chat] API error:", error);
+
+        const statusCode = (error as { statusCode?: number })?.statusCode;
+        const errorMessage = (error as { message?: string })?.message ?? "An unexpected error occurred";
+
+        // Rate limit (429) — tell the client to wait and retry
+        if (statusCode === 429) {
+            const retryMatch = errorMessage.match(/retry in ([\d.]+)s/i);
+            const retryAfter = retryMatch ? Math.ceil(Number(retryMatch[1])) : 60;
+
+            return Response.json(
+                {
+                    error: "Rate limit exceeded. You've hit the Gemini API free tier limit (20 requests/day). Please wait and try again, or upgrade your API plan.",
+                    retryAfter,
+                },
+                {
+                    status: 429,
+                    headers: { "Retry-After": String(retryAfter) },
+                }
+            );
+        }
+
+        return Response.json(
+            { error: errorMessage },
+            { status: statusCode || 500 }
+        );
+    }
 
 }

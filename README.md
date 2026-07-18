@@ -9,7 +9,7 @@ AskGPT is an authenticated chat application built with Next.js App Router. Users
 - Tool calling with function tools that work on any model:
   - `get_weather` — current conditions via the Open-Meteo geocoding and forecast APIs
   - `google_search` — Google Custom Search JSON API for up-to-date web results
-- Google Gemini models through `getChatModel()` (default `gemini-2.5-flash`), with optional per-conversation model override stored in the database
+- Google Gemini models through `getChatModel()` (default `gemini-3.1-flash-lite`), with optional per-conversation model override stored in the database
 - Clerk authentication; public sign-in at `/sign-in`, all other routes protected by `proxy.ts`
 - Conversation management: create, rename, pin/unpin, delete; sidebar list ordered by pin then recency
 - Message persistence with structured `parts` JSON for AI SDK UI messages
