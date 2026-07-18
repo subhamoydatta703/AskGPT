@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Bot,
   MoreHorizontalIcon,
   PencilIcon,
   PinIcon,
@@ -72,8 +73,8 @@ export function AppSidebar() {
               className="font-semibold tracking-tight"
               render={<Link href="/" />}
             >
-              <span className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm text-primary-foreground">
-                C
+              <span className="flex size-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 text-white shadow-md shadow-purple-500/20">
+                <Bot className="size-5" />
               </span>
               <span>AskGPT</span>
             </SidebarMenuButton>
