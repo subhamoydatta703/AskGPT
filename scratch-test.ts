@@ -23,13 +23,13 @@ async function runTest() {
     console.error("  ERROR:", err.message, "\n");
   }
 
-  // ── Test 2: google_search provider tool ──
-  console.log("--- Test 2: google_search (provider-defined tool) ---");
+  // ── Test 2: web_search tool (Tavily) ──
+  console.log("--- Test 2: web_search (Tavily) ---");
   try {
     const searchResult = await generateText({
       model: getChatModel(),
       prompt: "Who won the Euro 2024 football championship?",
-      tools: { google_search: chatTools.google_search },
+      tools: { web_search: chatTools.web_search },
       stopWhen: stepCountIs(5),
       onStepFinish: (step) => {
         console.log(`  [step] finishReason=${step.finishReason}, toolCalls=${step.toolCalls?.map(tc => tc.toolName).join(",") || "none"}, hasText=${!!step.text}`);

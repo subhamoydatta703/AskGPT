@@ -8,7 +8,7 @@ AskGPT is an authenticated chat application built with Next.js App Router. Users
 - Server-side completions via `streamText` on `POST /api/chat`
 - Tool calling with function tools that work on any model:
   - `get_weather` — current conditions via the Open-Meteo geocoding and forecast APIs
-  - `google_search` — Google Custom Search JSON API for up-to-date web results
+  - `web_search` — Tavily search API for real-time web results, page content, and news
 - Google Gemini models through `getChatModel()` (default `gemini-3.1-flash-lite`), with optional per-conversation model override stored in the database
 - Clerk authentication; public sign-in at `/sign-in`, all other routes protected by `proxy.ts`
 - Conversation management: create, rename, pin/unpin, delete; sidebar list ordered by pin then recency
@@ -54,7 +54,7 @@ sequenceDiagram
     end
     API->>Model: streamText (system, history, tools, smoothStream)
     opt tool calls (up to 5 steps)
-        Model->>Tools: get_weather / google_search
+        Model->>Tools: get_weather / web_search
         Tools-->>Model: tool results
     end
     Model-->>API: UI message stream
@@ -70,7 +70,7 @@ sequenceDiagram
 - A PostgreSQL database (any host; connection string via `DATABASE_URL`)
 - [Clerk](https://clerk.com/) application credentials
 - [Google AI](https://ai.google.dev/) API key for Gemini
-- Optional: [Google Custom Search](https://developers.google.com/custom-search) API key and search engine ID for `google_search`
+- Optional: [Tavily](https://tavily.com) API key for `web_search`
 
 ## Setup
 
@@ -97,9 +97,8 @@ CLERK_SECRET_KEY="sk_test_..."
 # Google Gemini (@ai-sdk/google)
 GOOGLE_GENERATIVE_AI_API_KEY="..."
 
-# Google Custom Search (features/ai/tools.ts) — required for google_search tool
-GOOGLE_SEARCH_API_KEY="..."
-GOOGLE_SEARCH_ENGINE_ID="..."
+# Tavily (features/ai/tools.ts) — required for web_search tool
+TAVILY_API_KEY="tvly-..."
 ```
 
 | Variable | Required for | Notes |
@@ -108,8 +107,7 @@ GOOGLE_SEARCH_ENGINE_ID="..."
 | `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Auth (client) | Safe to expose in the browser |
 | `CLERK_SECRET_KEY` | Auth (server) | Server-only |
 | `GOOGLE_GENERATIVE_AI_API_KEY` | Chat completions | Used by `@ai-sdk/google` |
-| `GOOGLE_SEARCH_API_KEY` | `google_search` tool | Server-only; tool throws if missing |
-| `GOOGLE_SEARCH_ENGINE_ID` | `google_search` tool | Custom Search engine (`cx`) ID |
+| `TAVILY_API_KEY` | `web_search` tool | Server-only; tool throws if missing |
 
 `get_weather` uses public Open-Meteo endpoints and does not require an API key.
 
@@ -165,7 +163,7 @@ components/
 features/
   ai/
     actions/chat-store.ts  # load/save UI messages
-    tools.ts               # get_weather, google_search
+    tools.ts               # get_weather, web_search
     utils/model.ts         # getChatModel (Gemini)
   auth/                    # onBoard, requireUser
   conversation/            # Sidebar, chat UI, conversation server actions
