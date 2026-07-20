@@ -31,21 +31,23 @@ type ForecastResponse = {
   current_units?: Record<string, string>;
 };
 
+type SearchTopic = "general" | "news";
+
 type SearchInput = {
   query: string;
+  topic?: SearchTopic;
   numResults?: number;
 };
 
-type GoogleCustomSearchResponse = {
-  items?: Array<{
+type TavilySearchResponse = {
+  answer?: string;
+  results?: Array<{
     title: string;
-    link: string;
-    snippet?: string;
-    displayLink?: string;
+    url: string;
+    content: string;
+    score: number;
+    published_date?: string;
   }>;
-  searchInformation?: {
-    totalResults?: string;
-  };
 };
 
 function describeWeatherCode(code: number) {
@@ -170,22 +172,27 @@ export const chatTools = {
     },
   }),
 
-  // NOTE: this replaces google.tools.googleSearch({}). That version is a
-  // Gemini provider-defined tool — it only works on Gemini models, and
-  // @ai-sdk/google silently drops all function tools (get_weather included)
-  // whenever a provider-defined tool is present in the same request
-  // (see https://github.com/vercel/ai/issues/13911). Implementing search as
-  // a plain function tool means it works on any model and composes freely
-  // with the rest of chatTools.
-  google_search: tool({
+  // NOTE: this is a plain function tool (not a provider-defined tool like
+  // google.tools.googleSearch({})). @ai-sdk/google silently drops all
+  // function tools (get_weather included) whenever a provider-defined tool
+  // is present in the same request (see
+  // https://github.com/vercel/ai/issues/13911). A plain function tool works
+  // on any model and composes freely with the rest of chatTools.
+  web_search: tool({
     description:
-      "Search the web via Google for current information, facts, news, or anything that requires up-to-date or external knowledge not already known.",
+      "Search the web for current information: facts, news, scores, prices, or anything time-sensitive or not already known. Use topic 'news' for recent events (e.g. 'yesterday's match result'), 'general' otherwise.",
     inputSchema: jsonSchema<SearchInput>({
       type: "object",
       properties: {
         query: {
           type: "string",
           description: "The search query to run.",
+        },
+        topic: {
+          type: "string",
+          enum: ["general", "news"],
+          description:
+            "'news' biases results toward recent, time-sensitive events. Defaults to 'general'.",
         },
         numResults: {
           type: "number",
@@ -195,37 +202,43 @@ export const chatTools = {
       required: ["query"],
       additionalProperties: false,
     }),
-    execute: async ({ query, numResults = 5 }, { abortSignal }) => {
-      const apiKey = process.env.GOOGLE_SEARCH_API_KEY;
-      const searchEngineId = process.env.GOOGLE_SEARCH_ENGINE_ID;
+    execute: async ({ query, topic = "general", numResults = 5 }, { abortSignal }) => {
+      const apiKey = process.env.TAVILY_API_KEY;
 
-      if (!apiKey || !searchEngineId) {
-        throw new Error(
-          "Missing GOOGLE_SEARCH_API_KEY or GOOGLE_SEARCH_ENGINE_ID environment variables"
-        );
+      if (!apiKey) {
+        throw new Error("Missing TAVILY_API_KEY environment variable");
       }
 
-      const searchUrl = new URL("https://www.googleapis.com/customsearch/v1");
-      searchUrl.searchParams.set("key", apiKey);
-      searchUrl.searchParams.set("cx", searchEngineId);
-      searchUrl.searchParams.set("q", query);
-      searchUrl.searchParams.set("num", String(Math.min(Math.max(numResults, 1), 10)));
+      const response = await fetch("https://api.tavily.com/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abortSignal,
+        body: JSON.stringify({
+          api_key: apiKey,
+          query,
+          topic,
+          search_depth: "advanced",
+          include_answer: "basic",
+          max_results: Math.min(Math.max(numResults, 1), 10),
+        }),
+      });
 
-      const data = await fetchJson<GoogleCustomSearchResponse>(
-        searchUrl.toString(),
-        abortSignal
-      );
+      if (!response.ok) {
+        throw new Error(`Tavily search failed with status ${response.status}`);
+      }
 
-      const results = (data.items ?? []).map((item) => ({
+      const data = (await response.json()) as TavilySearchResponse;
+
+      const results = (data.results ?? []).map((item) => ({
         title: item.title,
-        url: item.link,
-        snippet: item.snippet ?? "",
-        source: item.displayLink ?? "",
+        url: item.url,
+        content: item.content,
+        publishedDate: item.published_date,
       }));
 
       return {
         query,
-        totalResults: data.searchInformation?.totalResults,
+        answer: data.answer,
         results,
       };
     },
